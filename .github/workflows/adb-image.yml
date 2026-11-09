@@ -1,0 +1,163 @@
+name: Build and publish ADB-compatible Metabase
+
+on:
+  push:
+    branches: [adb-v0.65.3.6]
+    tags: [adb-v*]
+  pull_request:
+    branches: [adb-v0.65.3.6]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: adb-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Metadata regression (${{ matrix.database }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        database: ["mysql:8.4", "mariadb:10.11"]
+    services:
+      mysql:
+        image: ${{ matrix.database }}
+        env:
+          MYSQL_ROOT_PASSWORD: metabase_ci
+          MYSQL_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pmetabase_ci || mariadb-admin ping -h 127.0.0.1 -uroot -pmetabase_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      CI: "true"
+      MB_DB_TYPE: h2
+      MB_ANON_TRACKING_ENABLED: "false"
+      MB_MYSQL_TEST_HOST: localhost
+      MB_MYSQL_TEST_PORT: "3306"
+      MB_MYSQL_TEST_USER: root
+      MB_MYSQL_TEST_PASSWORD: metabase_ci
+      JAVA_TOOL_OPTIONS: "-Xmx4g"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/prepare-backend
+      - name: Check Clojure readability
+        run: |
+          ./bin/mage -check-readable src/metabase/driver/mysql.clj
+          ./bin/mage -check-readable test/metabase/driver/mysql_test.clj
+      - name: Test missing metadata field and native generated columns
+        run: >-
+          ./bin/test-agent --oss --drivers=mysql
+          :only '[metabase.driver.mysql-test/describe-fields-without-generation-expression-test
+          metabase.driver.mysql-test/describe-fields-generated-columns-test]'
+
+  publish:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    env:
+      MB_EDITION: oss
+      INTERACTIVE: "false"
+      CI: "true"
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      JAVA_TOOL_OPTIONS: "-Xmx3g"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare backend
+        uses: ./.github/actions/prepare-backend
+      - name: Prepare frontend
+        uses: ./.github/actions/prepare-frontend
+      - name: Image coordinates
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "version=v0.65.3.6-adb.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "sha=sha-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+      - name: Build OSS JAR from patched source
+        env:
+          BUILD_VERSION: ${{ steps.image.outputs.version }}
+        run: ./bin/build.sh :version "\"${BUILD_VERSION}\""
+      - name: Prepare Docker context and checksum
+        run: |
+          cp target/uberjar/metabase.jar bin/docker/metabase.jar
+          (cd target/uberjar && sha256sum metabase.jar > metabase.jar.sha256)
+      - name: Upload downloadable JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: metabase-adb-${{ steps.image.outputs.sha }}
+          path: |
+            target/uberjar/metabase.jar
+            target/uberjar/metabase.jar.sha256
+          if-no-files-found: error
+          retention-days: 14
+      - uses: docker/setup-buildx-action@v3
+      - name: Build candidate image
+        uses: docker/build-push-action@v6
+        with:
+          context: bin/docker
+          file: bin/docker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: metabase-adb:ci
+          build-args: GIT_COMMIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=adb-runtime
+          cache-to: type=gha,mode=max,scope=adb-runtime
+      - name: Verify image starts before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name metabase-adb-smoke             -p 127.0.0.1:3000:3000             -e MB_ANON_TRACKING_ENABLED=false             -e JAVA_OPTS=-Xmx1g metabase-adb:ci
+          trap 'docker logs metabase-adb-smoke; docker rm -f metabase-adb-smoke' EXIT
+          for attempt in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:3000/api/health | grep -q '"status":"ok"'; then
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' metabase-adb-smoke)" != true ]; then
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "Metabase startup timed out" >&2
+          exit 1
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish verified image
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          VERSION: ${{ steps.image.outputs.version }}
+          SHA_TAG: ${{ steps.image.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tag in "$VERSION" "$SHA_TAG"; do
+            docker tag metabase-adb:ci "$IMAGE:$tag"
+            docker push "$IMAGE:$tag"
+          done
+          if [ "$GITHUB_REF" = refs/heads/adb-v0.65.3.6 ]; then
+            docker tag metabase-adb:ci "$IMAGE:latest"
+            docker push "$IMAGE:latest"
+          fi
+          {
+            echo "### ADB-compatible Metabase"
+            echo "Image: \`$IMAGE:$VERSION\`"
+            echo "Pinned commit: \`$IMAGE:$SHA_TAG\`"
+            echo 'Platform: linux/amd64'
+          } >> "$GITHUB_STEP_SUMMARY"

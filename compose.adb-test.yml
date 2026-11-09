@@ -1,0 +1,39 @@
+services:
+  metabase-test:
+    image: ${METABASE_ADB_IMAGE:-ghcr.io/crayon-hua/metabase:latest}
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_HOST: postgres-test
+      MB_DB_PORT: "5432"
+      MB_DB_DBNAME: metabase_test
+      MB_DB_USER: metabase_test
+      MB_DB_PASS: ${MB_TEST_DB_PASSWORD:?Set MB_TEST_DB_PASSWORD}
+      MB_ANON_TRACKING_ENABLED: "false"
+      MB_SITE_LOCALE: zh
+      JAVA_TIMEZONE: Asia/Shanghai
+      JAVA_OPTS: "-Xms256m -Xmx768m"
+    ports:
+      - "3001:3000"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 1200m
+  postgres-test:
+    image: postgres:16
+    environment:
+      TZ: Asia/Shanghai
+      POSTGRES_DB: metabase_test
+      POSTGRES_USER: metabase_test
+      POSTGRES_PASSWORD: ${MB_TEST_DB_PASSWORD:?Set MB_TEST_DB_PASSWORD}
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U metabase_test -d metabase_test]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    mem_limit: 384m
+volumes:
+  postgres_test_data:
