@@ -56,7 +56,8 @@ jobs:
       - name: Test missing metadata field and native generated columns
         run: >-
           ./bin/test-agent --oss --drivers=mysql
-          :only '[metabase.driver.mysql-test/describe-fields-without-generation-expression-test
+          :only '[metabase.driver.mysql-test/describe-fields-boolean-metadata-test
+          metabase.driver.mysql-test/describe-fields-without-generation-expression-test
           metabase.driver.mysql-test/describe-fields-generated-columns-test]'
 
   publish:

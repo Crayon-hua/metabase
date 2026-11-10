@@ -4,7 +4,8 @@ This branch is based on upstream **v0.65.3.6**, not upstream master. The patch a
 `information_schema.columns.GENERATION_EXPRESSION`, which is absent on the reported
 ADB endpoint (`SELECT VERSION()` returns `5.6.16-log`). Generated columns are identified
 using `EXTRA` markers `VIRTUAL GENERATED` and `STORED GENERATED`. `DEFAULT_GENERATED`
-and `auto_increment` are not treated as generated columns. The version warning is
+and `auto_increment` are not treated as generated columns. JDBC metadata flags accept
+both Boolean values (as returned by ADB) and numeric 0/1 values. The version warning is
 intentionally retained: this patch does not provide full MySQL 5.6 or ADB compatibility.
 
 ## Build and publish
