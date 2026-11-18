@@ -1,15 +1,16 @@
 import { t } from "ttag";
 
+import { getUser } from "metabase/current-user";
 import {
   useIsFullPageMetabot,
   useMetabotAgent,
-  useUserMetabotPermissions,
 } from "metabase/metabot/hooks";
-import { useSetting } from "metabase/settings";
+import { useSelector } from "metabase/redux";
 import { ActionIcon, type ActionIconProps, Tooltip } from "metabase/ui";
 import { METAKEY } from "metabase/utils/browser";
 
 import { trackMetabotChatOpened } from "../analytics";
+import { EXTERNAL_AGENT_NAME } from "../externalAgent";
 
 import { MetabotIcon } from "./MetabotIcon";
 
@@ -21,12 +22,11 @@ export function MetabotAppBarButton({
   className,
   ...rest
 }: MetabotAppBarButtonProps) {
-  const { hasMetabotAccess } = useUserMetabotPermissions();
+  const currentUser = useSelector(getUser);
   const metabot = useMetabotAgent("omnibot");
-  const metabotName = useSetting("metabot-name");
   const isFullPageMetabot = useIsFullPageMetabot();
 
-  if (!hasMetabotAccess) {
+  if (!currentUser) {
     return null;
   }
 
@@ -38,7 +38,7 @@ export function MetabotAppBarButton({
     metabot.setVisible(!metabot.visible);
   };
 
-  const label = t`Chat with ${metabotName} (${METAKEY}+E)`;
+  const label = t`Chat with ${EXTERNAL_AGENT_NAME} (${METAKEY}+E)`;
 
   return (
     <Tooltip label={label}>

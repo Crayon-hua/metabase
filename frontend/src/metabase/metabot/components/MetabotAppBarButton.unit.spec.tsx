@@ -1,48 +1,32 @@
 import userEvent from "@testing-library/user-event";
-import fetchMock from "fetch-mock";
 
-import { setupEnterprisePlugins } from "__support__/enterprise";
 import { mockSettings } from "__support__/settings";
 import { createMockState } from "__support__/state";
-import { renderWithProviders, screen, waitFor, within } from "__support__/ui";
+import { renderWithProviders, screen, within } from "__support__/ui";
 import * as Analytics from "metabase/analytics";
 import { Route } from "metabase/router";
-import type { UserMetabotPermissions } from "metabase-types/api";
-import { createMockUserMetabotPermissions } from "metabase-types/api/mocks";
+import { createMockUser } from "metabase-types/api/mocks";
 
 import { MetabotProvider } from "../context";
+import { EXTERNAL_AGENT_NAME } from "../externalAgent";
 
 import { MetabotAppBarButton } from "./MetabotAppBarButton";
 
 interface SetupOpts {
-  isMetabotEnabled?: boolean;
-  isConfigured?: boolean;
-  permissionOverrides?: Partial<UserMetabotPermissions>;
   pathname?: string;
-  metabotName?: string;
+  authenticated?: boolean;
   metabotIcon?: string;
 }
 
 function setup({
-  isMetabotEnabled = true,
-  isConfigured = true,
-  permissionOverrides,
   pathname = "/",
-  metabotName = "Metabot",
+  authenticated = true,
   metabotIcon = "metabot",
 }: SetupOpts = {}) {
-  fetchMock.get(
-    "path:/api/metabot/permissions/user-permissions",
-    createMockUserMetabotPermissions(permissionOverrides),
-  );
-
   const settings = mockSettings({
-    "llm-metabot-configured?": isConfigured,
-    "metabot-enabled?": isMetabotEnabled,
-    "metabot-name": metabotName,
+    "metabot-name": EXTERNAL_AGENT_NAME,
     "metabot-icon": metabotIcon,
   });
-  setupEnterprisePlugins();
 
   const TestComponent = () => (
     <MetabotProvider>
@@ -57,6 +41,7 @@ function setup({
       initialRoute: pathname,
       storeInitialState: createMockState({
         settings,
+        currentUser: authenticated ? createMockUser() : null,
       }),
     },
   );
@@ -65,35 +50,21 @@ function setup({
 }
 
 describe("MetabotAppBarButton", () => {
-  it("should render the button when metabot is enabled", async () => {
-    setup({ isMetabotEnabled: true });
+  it("should render the button for authenticated users", () => {
+    setup({ authenticated: true });
     expect(
-      await screen.findByRole("button", { name: /Chat with Metabot/ }),
+      screen.getByRole("button", {
+        name: new RegExp(`Chat with ${EXTERNAL_AGENT_NAME}`),
+      }),
     ).toBeInTheDocument();
   });
 
-  it("should render the button when metabot is enabled but not configured", async () => {
-    setup({ isConfigured: false, isMetabotEnabled: true });
+  it("should not render the button when unauthenticated", () => {
+    setup({ authenticated: false });
     expect(
-      await screen.findByRole("button", { name: /Chat with Metabot/ }),
-    ).toBeInTheDocument();
-  });
-
-  it("should not render the button when metabot is globally disabled", () => {
-    setup({ isMetabotEnabled: false });
-    expect(
-      screen.queryByRole("button", { name: /Chat with Metabot/ }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("should not render the button when user lacks metabot permission", async () => {
-    setup({ permissionOverrides: { metabot: "no" } });
-    // Wait for the API response to be processed
-    await waitFor(() => {
-      expect(fetchMock.callHistory.calls().length).toBeGreaterThan(0);
-    });
-    expect(
-      screen.queryByRole("button", { name: /Chat with Metabot/ }),
+      screen.queryByRole("button", {
+        name: new RegExp(`Chat with ${EXTERNAL_AGENT_NAME}`),
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -103,30 +74,36 @@ describe("MetabotAppBarButton", () => {
     "/metabot/conversation/past-conversation-id",
   ])(
     "should disable the button on the full-page metabot surface (%s)",
-    async (pathname) => {
-      setup({ isMetabotEnabled: true, pathname });
+    (pathname) => {
+      setup({ pathname });
       expect(
-        await screen.findByRole("button", { name: /Chat with Metabot/ }),
+        screen.getByRole("button", {
+          name: new RegExp(`Chat with ${EXTERNAL_AGENT_NAME}`),
+        }),
       ).toBeDisabled();
     },
   );
 
-  it("should not disable the button on other question pages", async () => {
-    setup({ isMetabotEnabled: true, pathname: "/question/123" });
+  it("should not disable the button on other question pages", () => {
+    setup({ pathname: "/question/123" });
     expect(
-      await screen.findByRole("button", { name: /Chat with Metabot/ }),
+      screen.getByRole("button", {
+        name: new RegExp(`Chat with ${EXTERNAL_AGENT_NAME}`),
+      }),
     ).toBeEnabled();
   });
 
   it("should toggle metabot visibility when clicked", async () => {
-    const { store } = setup({ isMetabotEnabled: true });
+    const { store } = setup();
 
     // Unjustified type cast. FIXME
     const initialState = store.getState() as any;
     expect(initialState.metabot.agents.omnibot.visible).toBe(false);
 
     await userEvent.click(
-      await screen.findByRole("button", { name: /Chat with Metabot/ }),
+      screen.getByRole("button", {
+        name: new RegExp(`Chat with ${EXTERNAL_AGENT_NAME}`),
+      }),
     );
 
     // Unjustified type cast. FIXME
@@ -138,8 +115,8 @@ describe("MetabotAppBarButton", () => {
     const trackEvent = jest.mocked(Analytics.trackSimpleEvent);
     trackEvent.mockClear();
     setup();
-    const button = await screen.findByRole("button", {
-      name: /Chat with Metabot/,
+    const button = screen.getByRole("button", {
+      name: new RegExp(`Chat with ${EXTERNAL_AGENT_NAME}`),
     });
 
     await userEvent.click(button);
@@ -153,17 +130,16 @@ describe("MetabotAppBarButton", () => {
     expect(trackEvent).toHaveBeenCalledTimes(1);
   });
 
-  it("should use the custom metabot name and icon", async () => {
+  it("should use the custom metabot icon", () => {
     setup({
-      metabotName: "HAL 9000",
       metabotIcon: "data:image/png;base64,iVBORw0KGgo=",
     });
 
-    const button = await screen.findByRole("button", {
-      name: /Chat with HAL 9000/,
+    const button = screen.getByRole("button", {
+      name: new RegExp(`Chat with ${EXTERNAL_AGENT_NAME}`),
     });
     expect(
-      within(button).getByRole("img", { name: "HAL 9000" }),
+      within(button).getByRole("img", { name: EXTERNAL_AGENT_NAME }),
     ).toHaveAttribute("src", "data:image/png;base64,iVBORw0KGgo=");
   });
 });

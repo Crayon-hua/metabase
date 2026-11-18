@@ -25,6 +25,11 @@ export const getAdminPaths: () => AdminPath[] = () => {
       key: "metabot",
     },
     {
+      getName: () => t`SQL Agent`,
+      path: "/admin/sql-agent",
+      key: "sql-agent",
+    },
+    {
       getName: () => t`Table Metadata`,
       path: "/admin/datamodel",
       key: "data-model",

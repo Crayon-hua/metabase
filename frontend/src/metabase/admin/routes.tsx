@@ -23,6 +23,7 @@ import type { State } from "metabase/redux/store";
 import { Route, type RouteComponent, redirect } from "metabase/router";
 
 import type { MetabotAdminLayout } from "./ai/MetabotAdminLayout";
+import type { SqlAgentAdminLayout } from "./sql-agent/SqlAgentAdminLayout";
 import { getSettingsRoutes } from "./settingsRoutes";
 import {
   RedirectToAllowedSettings,
@@ -156,6 +157,34 @@ const mcpSettings = () =>
 const oauthAuthorizations = () =>
   import(/* webpackChunkName: "admin" */ "./ai/OAuthAuthorizationsPage").then(
     ({ OAuthAuthorizationsPage }) => ({ Component: OAuthAuthorizationsPage }),
+  );
+
+const sqlAgentLayout =
+  (props: ComponentProps<typeof SqlAgentAdminLayout> = {}) =>
+  () =>
+    import(
+      /* webpackChunkName: "admin" */ "./sql-agent/SqlAgentAdminLayout"
+    ).then(({ SqlAgentAdminLayout }) => ({
+      Component: function SqlAgentAdminLayoutRoute() {
+        return <SqlAgentAdminLayout {...props} />;
+      },
+    }));
+
+const sqlAgentOverview = () =>
+  import(
+    /* webpackChunkName: "admin" */ "./sql-agent/SqlAgentOverviewPage"
+  ).then(({ SqlAgentOverviewPage }) => ({ Component: SqlAgentOverviewPage }));
+
+const sqlAgentWorkbench = () =>
+  import(
+    /* webpackChunkName: "admin" */ "./sql-agent/SqlAgentWorkbenchPage"
+  ).then(({ SqlAgentWorkbenchPage }) => ({
+    Component: SqlAgentWorkbenchPage,
+  }));
+
+const sqlAgentMcp = () =>
+  import(/* webpackChunkName: "admin" */ "./sql-agent/SqlAgentMcpPage").then(
+    ({ SqlAgentMcpPage }) => ({ Component: SqlAgentMcpPage }),
   );
 
 const help = () =>
@@ -366,6 +395,22 @@ export const getRoutes = (
                 <PLUGIN_CACHING.StrategyEditorForQuestionsAndDashboards />
               }
             />
+          </Route>
+        </Route>
+
+        {/* SQL Agent */}
+        <Route
+          path="sql-agent"
+          element={createElement(createAdminRouteGuard("sql-agent"))}
+        >
+          <Route key="sql-agent-layout" lazy={sqlAgentLayout()}>
+            <Route index key="sql-agent-index" lazy={sqlAgentOverview} />
+            <Route
+              key="sql-agent-workbench"
+              path="workbench"
+              lazy={sqlAgentWorkbench}
+            />
+            <Route key="sql-agent-mcp" path="mcp" lazy={sqlAgentMcp} />
           </Route>
         </Route>
 
