@@ -187,6 +187,13 @@
        "query, visualization settings — read the matching skill unless it is already in context.\n"
        "This instance's glossary defines business terms used in its data. Fetch them with glossary() before you "
        "answer — an instance's own definition of a term overrides your reading of it.\n"
+       ;; Query-knowledge tools (Admin → AI → 知识配置). Advertise by name so clients that skim instructions
+       ;; still discover them; they are ordinary v2 tools gated by agent:content:read / agent:content:write.
+       "For analytics questions against a warehouse database, call retrieve_query_evidence(database_id, question) "
+       "first to fetch relevant tables, field synonyms, business terms, and relations from the instance's "
+       "query-knowledge index (configured under Admin → AI → Knowledge). Use get_query_knowledge(database_id) "
+       "for the full configured vocabulary; save_query_knowledge is admin-only write. These tools do NOT generate "
+       "SQL — pass their evidence into browse_data / execute_query / execute_sql as needed.\n"
        "Answer questions from data with execute_query (structured MBQL) by default; execute_sql is the escape hatch "
        "for what MBQL cannot express or an explicit request for SQL.\n"
        "When visualize_query is available, use it for any request to show, chart, plot, or visualize data (pass a "
