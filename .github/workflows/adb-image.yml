@@ -91,7 +91,23 @@ jobs:
       - name: Build OSS JAR from patched source
         env:
           BUILD_VERSION: ${{ steps.image.outputs.version }}
-        run: ./bin/build.sh :version "\"${BUILD_VERSION}\""
+        shell: bash
+        run: |
+          set -euo pipefail
+          # tools.deps can flake on ancient Maven version ranges (e.g. colorize → clojure [1.2.1],[1.3.0])
+          # when Maven Central metadata briefly fails; retry a few times before giving up.
+          attempt=1
+          max_attempts=3
+          until ./bin/build.sh :version "\"${BUILD_VERSION}\""; do
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "build.sh failed after ${max_attempts} attempts" >&2
+              exit 1
+            fi
+            echo "build.sh failed (attempt ${attempt}/${max_attempts}); clearing .cpcache and retrying..." >&2
+            rm -rf .cpcache bin/build/.cpcache || true
+            attempt=$((attempt + 1))
+            sleep $((attempt * 15))
+          done
       - name: Prepare Docker context and checksum
         run: |
           cp target/uberjar/metabase.jar bin/docker/metabase.jar
