@@ -158,7 +158,8 @@
    "https://www.metabase.com/"
    "https://metabase.com/"
    ;; Whaee Agent sidebar chatbox (marketing-style iframe SSO).
-   "https://agent.whaee.com"])
+   "https://agent.whaee.com"
+   "https://agent-test.whaee.com"])
 
 (def ^:private always-allowed-resource-hosts
   "Implicitly-allowed `img-src`/`font-src` hosts: our own origin and `data:` URIs."
