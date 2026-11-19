@@ -12,6 +12,7 @@ import {
 import { Box, Flex, Stack, Switch, Text } from "metabase/ui";
 
 import { CursorInstallLink } from "./CursorInstallLink";
+import { McpApiKeySection } from "./McpApiKeySection";
 import { McpServerUrlSection } from "./MCPServerUrlSection";
 
 type McpClient = {
@@ -84,6 +85,8 @@ export const McpAppsSettings = ({ id }: { id?: string }) => {
       {isEnabled ? (
         <Stack gap="xl">
           <McpServerUrlSection />
+
+          <McpApiKeySection />
 
           <CommonMcpClientsSection />
 

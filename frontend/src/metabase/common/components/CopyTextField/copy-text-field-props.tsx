@@ -1,7 +1,8 @@
-import type { MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import { t } from "ttag";
 
-import { ActionIcon, CopyButton, Icon, Tooltip } from "metabase/ui";
+import { copyTextToClipboard } from "metabase/common/utils/clipboard";
+import { ActionIcon, Icon, Tooltip } from "metabase/ui";
 
 type CopyableElement = HTMLInputElement | HTMLTextAreaElement;
 
@@ -21,6 +22,39 @@ export type CopyTextFieldOptions<E extends CopyableElement> = {
 };
 
 const DEFAULT_READ_ONLY = true;
+
+function CopyFieldButton({
+  value,
+  onCopied,
+}: {
+  value: string;
+  onCopied?: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    const ok = await copyTextToClipboard(value);
+    if (!ok) {
+      return;
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+    onCopied?.();
+  };
+
+  return (
+    <Tooltip label={t`Copied!`} opened={copied}>
+      <ActionIcon
+        variant="subtle"
+        aria-label={t`Copy`}
+        data-testid="copy-button"
+        onClick={() => void handleCopy()}
+      >
+        <Icon name="copy" />
+      </ActionIcon>
+    </Tooltip>
+  );
+}
 
 export function getCopyTextFieldProps<E extends CopyableElement>({
   value,
@@ -43,23 +77,7 @@ export function getCopyTextFieldProps<E extends CopyableElement>({
     },
     rightSectionPointerEvents: "all" as const,
     rightSection: value ? (
-      <CopyButton value={value} timeout={2000}>
-        {({ copied, copy }) => (
-          <Tooltip label={t`Copied!`} opened={copied}>
-            <ActionIcon
-              variant="subtle"
-              aria-label={t`Copy`}
-              data-testid="copy-button"
-              onClick={() => {
-                copy();
-                onCopied?.();
-              }}
-            >
-              <Icon name="copy" />
-            </ActionIcon>
-          </Tooltip>
-        )}
-      </CopyButton>
+      <CopyFieldButton value={value} onCopied={onCopied} />
     ) : undefined,
   };
 }

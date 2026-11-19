@@ -69,8 +69,16 @@
   (t2/count :model/QueryKnowledgeDocument :database_id database-id))
 
 (mu/defn set-embedding-model!
-  "Update embedding_model on the knowledge row without bumping revision."
+  "Update embedding_model on the knowledge row without bumping revision.
+   Creates an empty knowledge row when none exists so reindex can mark the index ready."
   [database-id     :- ms/PositiveInt
    embedding-model :- :string]
-  (when-let [existing (by-database-id database-id)]
-    (t2/update! :model/QueryKnowledge (:id existing) {:embedding_model embedding-model})))
+  (if-let [existing (by-database-id database-id)]
+    (do
+      (t2/update! :model/QueryKnowledge (:id existing) {:embedding_model embedding-model})
+      (by-database-id database-id))
+    (t2/insert-returning-instance! :model/QueryKnowledge
+                                   {:database_id     database-id
+                                    :revision        1
+                                    :body            empty-body
+                                    :embedding_model embedding-model})))

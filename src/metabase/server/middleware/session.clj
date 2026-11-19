@@ -274,13 +274,26 @@
             oauth-info   "oauth"
             mcp-ui-info  "mcp-ui")))
 
+(defn- api-key-from-request
+  "Raw API key from `X-Api-Key`, or from `Authorization: Bearer mb_…` on bearer-only MCP paths."
+  [oauth-bearer bearer-only? {:strs [x-api-key] :as headers} request]
+  (or x-api-key
+      (when bearer-only?
+        (when-let [token (when-let [extract (:extract-token oauth-bearer)]
+                           (extract request))]
+          (when (str/starts-with? (str token) "mb_")
+            token)))))
+
 (defn- merge-current-user-info
   [{:keys [oauth-bearer mcp-ui-credentials]}
-   {:keys [uri metabase-session-key anti-csrf-token], {:strs [x-metabase-locale x-api-key]} :headers, :as request}]
+   {:keys [uri metabase-session-key anti-csrf-token], {:strs [x-metabase-locale] :as headers} :headers, :as request}]
   (let [bearer-only? (bearer-only-path? (:bearer-only-paths oauth-bearer) uri)
         session-info (when-not bearer-only? (current-user-info-for-session metabase-session-key anti-csrf-token))
-        api-key-info (when-not (or bearer-only? session-info) (current-user-info-for-api-key x-api-key))
-        ;; Bearer and MCP UI credentials are consulted only when no normal session/API key authenticated.
+        ;; MCP paths still reject session cookies, but accept Metabase API keys for machine clients.
+        api-key-info (when-not session-info
+                       (current-user-info-for-api-key
+                        (api-key-from-request oauth-bearer bearer-only? headers request)))
+        ;; Bearer OAuth is consulted only when no session/API key authenticated.
         oauth-info   (when-not (or session-info api-key-info)
                        (current-user-info-for-oauth-token oauth-bearer request))
         mcp-ui-info  (when-not (or bearer-only? session-info api-key-info oauth-info)
@@ -309,7 +322,8 @@
   token, API key, OAuth bearer access token, OR MCP UI credential was passed. A bearer token additionally sets
   `:token-scopes` (the access it was granted); precedence is session > API key > bearer > MCP UI credential.
   Bearer tokens and MCP UI credentials authenticate only when `options` supplies their `:oauth-bearer` and
-  `:mcp-ui-credentials` fns. On a path in `:bearer-only-paths`, or below one, only a bearer token authenticates.
+  `:mcp-ui-credentials` fns. On a path in `:bearer-only-paths`, or below one, session cookies are ignored; OAuth
+  bearer tokens and Metabase API keys (`X-Api-Key` or `Authorization: Bearer mb_…`) still authenticate.
 
   `:metabase/authed-session-key-hash` is set only when it was the session that authenticated the request, and carries
   the `key_hashed` value of the one that did."

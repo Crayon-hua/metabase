@@ -64,8 +64,7 @@
         (if (empty? docs)
           (do
             (qk.db/delete-documents! database-id)
-            (when row
-              (qk.db/upsert! database-id rev body ident))
+            (qk.db/set-embedding-model! database-id ident)
             {:document_count 0 :embedding_model ident :revision rev})
           (let [vectors (qk.embed/embed! (mapv :text docs))
                 rows    (mapv (fn [doc vec]

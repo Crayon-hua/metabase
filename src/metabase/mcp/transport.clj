@@ -766,12 +766,14 @@
            (and (:authenticated-via-oauth? request) (not-any? accepted-scopes token-scopes))
            (respond @invalid-token)
 
-           ;; MCP authenticates only with an OAuth bearer token. The session middleware already ignores sessions and
-           ;; API keys on the MCP paths; this check keeps a request with a current user but no OAuth marker from
-           ;; dispatching should one arrive anyway. It gets the 401 discovery challenge below. A token that reaches
-           ;; here holds an MCP scope, so the session middleware kept only MCP scopes; the filter keeps only strings.
+           ;; OAuth bearer with MCP scopes.
            (and current-user-id (:authenticated-via-oauth? request))
            (dispatch current-user-id (into #{} (filter string?) token-scopes))
+
+           ;; Machine clients may authenticate with a Metabase API key (`X-Api-Key` or `Authorization: Bearer mb_…`).
+           ;; Grant the full surface scope set; tool access is still constrained by the key's user/group permissions.
+           (and current-user-id (= "api-key" (:embedding/auth-method request)))
+           (dispatch current-user-id (set accepted-scopes))
 
            ;; A bearer token that reaches here did NOT authenticate upstream: the session middleware
            ;; ([[metabase.server.middleware.session/current-user-info-for-oauth-token]]) resolves every *valid* bearer
@@ -781,10 +783,12 @@
            ;; revoked, or names a DEACTIVATED user. We must not re-resolve and dispatch it: doing so bypassed the
            ;; active-user check (a disabled user's token still authenticated) and the scope trust hinge (raw token
            ;; scopes dispatched verbatim). Return the RFC 6750 `invalid_token` 401 and dispatch nothing.
-           bearer-token
+           ;; Skip this branch when the bearer looked like an API key (`mb_…`) — that case already failed API-key
+           ;; auth above and should get the generic authentication challenge rather than `invalid_token`.
+           (and bearer-token (not (str/starts-with? (str bearer-token) "mb_")))
            (respond @invalid-token)
 
-           ;; No OAuth — return 401 with discovery
+           ;; No credential — return 401 with discovery
            :else
            (respond (json-response 401 (jsonrpc-error nil -32603 (message/msg ["Authentication required"]))
                                    {"WWW-Authenticate" (www-authenticate-discovery endpoint-paths default-path

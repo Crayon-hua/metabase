@@ -8,7 +8,8 @@
 (def options
   "Options for [[metabase.server.core/make-handler]].
   They add MCP origins to CORS and let the session middleware accept OAuth bearer tokens and MCP UI credentials.
-  On the MCP endpoint paths the session middleware accepts a bearer token and nothing else.
+  On the MCP endpoint paths the session middleware rejects session cookies but accepts OAuth bearer
+  tokens and Metabase API keys (`X-Api-Key` / `Authorization: Bearer mb_…`).
   The fns are passed as vars, so redefining one takes effect without rebuilding the handler."
   {:cors               {:origins-fn         #'mcp/cors-origins
                         :sandbox-origin?-fn #'mcp/sandbox-origin?}
