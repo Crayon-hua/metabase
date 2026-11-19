@@ -23,7 +23,6 @@ import type { State } from "metabase/redux/store";
 import { Route, type RouteComponent, redirect } from "metabase/router";
 
 import type { MetabotAdminLayout } from "./ai/MetabotAdminLayout";
-import type { SqlAgentAdminLayout } from "./sql-agent/SqlAgentAdminLayout";
 import { getSettingsRoutes } from "./settingsRoutes";
 import {
   RedirectToAllowedSettings,
@@ -159,33 +158,12 @@ const oauthAuthorizations = () =>
     ({ OAuthAuthorizationsPage }) => ({ Component: OAuthAuthorizationsPage }),
   );
 
-const sqlAgentLayout =
-  (props: ComponentProps<typeof SqlAgentAdminLayout> = {}) =>
-  () =>
-    import(
-      /* webpackChunkName: "admin" */ "./sql-agent/SqlAgentAdminLayout"
-    ).then(({ SqlAgentAdminLayout }) => ({
-      Component: function SqlAgentAdminLayoutRoute() {
-        return <SqlAgentAdminLayout {...props} />;
-      },
-    }));
-
-const sqlAgentOverview = () =>
+const knowledgeConfig = () =>
   import(
-    /* webpackChunkName: "admin" */ "./sql-agent/SqlAgentOverviewPage"
-  ).then(({ SqlAgentOverviewPage }) => ({ Component: SqlAgentOverviewPage }));
-
-const sqlAgentWorkbench = () =>
-  import(
-    /* webpackChunkName: "admin" */ "./sql-agent/SqlAgentWorkbenchPage"
-  ).then(({ SqlAgentWorkbenchPage }) => ({
-    Component: SqlAgentWorkbenchPage,
+    /* webpackChunkName: "admin" */ "./ai/knowledge/KnowledgeConfigPage"
+  ).then(({ KnowledgeConfigPage }) => ({
+    Component: KnowledgeConfigPage,
   }));
-
-const sqlAgentMcp = () =>
-  import(/* webpackChunkName: "admin" */ "./sql-agent/SqlAgentMcpPage").then(
-    ({ SqlAgentMcpPage }) => ({ Component: SqlAgentMcpPage }),
-  );
 
 const help = () =>
   import(/* webpackChunkName: "admin" */ "metabase/admin/help").then(
@@ -398,22 +376,6 @@ export const getRoutes = (
           </Route>
         </Route>
 
-        {/* SQL Agent */}
-        <Route
-          path="sql-agent"
-          element={createElement(createAdminRouteGuard("sql-agent"))}
-        >
-          <Route key="sql-agent-layout" lazy={sqlAgentLayout()}>
-            <Route index key="sql-agent-index" lazy={sqlAgentOverview} />
-            <Route
-              key="sql-agent-workbench"
-              path="workbench"
-              lazy={sqlAgentWorkbench}
-            />
-            <Route key="sql-agent-mcp" path="mcp" lazy={sqlAgentMcp} />
-          </Route>
-        </Route>
-
         {/* Metabot */}
         <Route
           path="metabot"
@@ -422,6 +384,11 @@ export const getRoutes = (
           <Route key="index-layout" lazy={metabotLayout()}>
             <Route index key="index" lazy={aiSettings} />
             <Route key="mcp" path="mcp" lazy={mcpSettings} />
+            <Route
+              key="knowledge"
+              path="knowledge"
+              lazy={knowledgeConfig}
+            />
           </Route>
           <Route
             key="mcp-authorizations-layout"

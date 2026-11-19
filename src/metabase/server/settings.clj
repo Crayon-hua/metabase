@@ -31,7 +31,8 @@ asana.com,
 gist.github.com,
 linkedin.com,
 twitter.com,
-x.com")
+x.com,
+agent.whaee.com")
 
 (defsetting allowed-iframe-hosts
   (deferred-tru "Allowed iframe hosts. Includes a list of popular hosts by default; set to '' '' to disable the default list.")

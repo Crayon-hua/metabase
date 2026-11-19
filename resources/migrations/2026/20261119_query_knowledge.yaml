@@ -1,0 +1,193 @@
+## Query knowledge + vector documents for NL2SQL evidence retrieval (stored in Metabase app DB).
+
+databaseChangeLog:
+  - changeSet:
+      id: v65.2026-11-19T10:00:00-query-knowledge
+      author: adb
+      comment: Create query_knowledge table (one row per database)
+      changes:
+        - createTable:
+            tableName: query_knowledge
+            remarks: Business query knowledge (aliases, terms, relations) keyed by Metabase database
+            columns:
+              - column:
+                  name: id
+                  type: int
+                  autoIncrement: true
+                  remarks: Primary key
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: database_id
+                  type: int
+                  remarks: FK to metabase_database.id
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: revision
+                  type: bigint
+                  remarks: Optimistic-lock revision; increments on each save
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+              - column:
+                  name: body
+                  type: ${text.type}
+                  remarks: JSON body with aliases, terms, and relations
+                  constraints:
+                    nullable: false
+              - column:
+                  name: embedding_model
+                  type: varchar(512)
+                  remarks: Embedding identity used when documents were last indexed (base_url|model)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: ${timestamp_type}
+                  remarks: When the knowledge row was created
+                  defaultValueComputed: current_timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: ${timestamp_type}
+                  remarks: When the knowledge row was last updated
+                  defaultValueComputed: current_timestamp
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropTable:
+            tableName: query_knowledge
+
+  - changeSet:
+      id: v65.2026-11-19T10:01:00-query-knowledge-fk
+      author: adb
+      comment: FK query_knowledge.database_id -> metabase_database.id
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: query_knowledge
+            baseColumnNames: database_id
+            referencedTableName: metabase_database
+            referencedColumnNames: id
+            constraintName: fk_query_knowledge_database_id
+            onDelete: CASCADE
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableName: query_knowledge
+            constraintName: fk_query_knowledge_database_id
+
+  - changeSet:
+      id: v65.2026-11-19T10:02:00-query-knowledge-document
+      author: adb
+      comment: Create query_knowledge_document table for embedding vectors (JSON float array fallback)
+      changes:
+        - createTable:
+            tableName: query_knowledge_document
+            remarks: Indexed documents with embedding vectors for hybrid retrieve
+            columns:
+              - column:
+                  name: id
+                  type: int
+                  autoIncrement: true
+                  remarks: Primary key
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: database_id
+                  type: int
+                  remarks: Metabase database id this document belongs to
+                  constraints:
+                    nullable: false
+              - column:
+                  name: kind
+                  type: varchar(32)
+                  remarks: Document kind (table or term)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: position
+                  type: int
+                  remarks: Index into tables list or terms list
+                  constraints:
+                    nullable: false
+              - column:
+                  name: text
+                  type: ${text.type}
+                  remarks: Source text that was embedded
+                  constraints:
+                    nullable: false
+              - column:
+                  name: embedding
+                  type: ${text.type}
+                  remarks: JSON array of floats (cosine similarity computed in app when pgvector unavailable)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: embedding_model
+                  type: varchar(512)
+                  remarks: Embedding identity used for this vector
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revision
+                  type: bigint
+                  remarks: Knowledge revision this document was built from
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: ${timestamp_type}
+                  remarks: When the document row was created
+                  defaultValueComputed: current_timestamp
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropTable:
+            tableName: query_knowledge_document
+
+  - changeSet:
+      id: v65.2026-11-19T10:03:00-query-knowledge-document-fk
+      author: adb
+      comment: FK query_knowledge_document.database_id -> metabase_database.id
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: query_knowledge_document
+            baseColumnNames: database_id
+            referencedTableName: metabase_database
+            referencedColumnNames: id
+            constraintName: fk_query_knowledge_document_database_id
+            onDelete: CASCADE
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableName: query_knowledge_document
+            constraintName: fk_query_knowledge_document_database_id
+
+  - changeSet:
+      id: v65.2026-11-19T10:04:00-query-knowledge-document-uniq
+      author: adb
+      comment: Unique (database_id, kind, position) on query_knowledge_document
+      changes:
+        - addUniqueConstraint:
+            tableName: query_knowledge_document
+            columnNames: database_id, kind, position
+            constraintName: uq_query_knowledge_document_db_kind_pos
+      rollback:
+        - dropUniqueConstraint:
+            tableName: query_knowledge_document
+            constraintName: uq_query_knowledge_document_db_kind_pos
+
+  - changeSet:
+      id: v65.2026-11-19T10:05:00-pgvector-extension
+      author: adb
+      comment: Best-effort CREATE EXTENSION vector on Postgres (ignored if unavailable)
+      dbms: postgresql
+      failOnError: false
+      changes:
+        - sql:
+            sql: CREATE EXTENSION IF NOT EXISTS vector
+      rollback:
+        - empty: {}

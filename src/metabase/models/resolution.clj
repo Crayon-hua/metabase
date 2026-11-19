@@ -67,6 +67,8 @@
     :model/TableUserSettings                 metabase.warehouse-schema.models.table-user-settings
     :model/FieldValues                       metabase.warehouse-schema.models.field-values
     :model/Glossary                          metabase.glossary.models.glossary
+    :model/QueryKnowledge                    metabase.query-knowledge.models.query-knowledge
+    :model/QueryKnowledgeDocument            metabase.query-knowledge.models.query-knowledge-document
     :model/Sandbox                           metabase-enterprise.sandbox.models.sandbox
     :model/ImplicitAction                    metabase.actions.models
     :model/ImpersonationQueryCache           metabase-enterprise.impersonation.models.impersonation-query-cache

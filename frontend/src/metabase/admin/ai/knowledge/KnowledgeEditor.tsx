@@ -15,27 +15,29 @@ import {
   Textarea,
 } from "metabase/ui";
 
-import { saveSqlAgentKnowledge } from "./api";
+import { saveQueryKnowledge } from "./api";
 import type {
-  SqlAgentAlias,
-  SqlAgentCatalog,
-  SqlAgentCatalogResponse,
-  SqlAgentKnowledge,
-  SqlAgentRelation,
-  SqlAgentTerm,
+  QueryKnowledgeAlias,
+  QueryKnowledgeBody,
+  QueryKnowledgeRelation,
+  QueryKnowledgeState,
+  QueryKnowledgeTable,
+  QueryKnowledgeTerm,
 } from "./types";
 
 type TabKey = "aliases" | "terms" | "relations";
 
 type KnowledgeEditorProps = {
-  sourceId: string;
-  catalog: SqlAgentCatalog;
+  databaseId: number;
+  revision: number;
+  knowledge: QueryKnowledgeBody;
+  tables: QueryKnowledgeTable[];
   disabled?: boolean;
-  onSaved: (state: SqlAgentCatalogResponse) => void;
+  onSaved: (state: QueryKnowledgeState) => void;
   onDirtyChange?: (dirty: boolean) => void;
 };
 
-function cloneKnowledge(knowledge: SqlAgentKnowledge): SqlAgentKnowledge {
+function cloneKnowledge(knowledge: QueryKnowledgeBody): QueryKnowledgeBody {
   return {
     aliases: knowledge.aliases.map((item) => ({
       ...item,
@@ -50,49 +52,51 @@ function cloneKnowledge(knowledge: SqlAgentKnowledge): SqlAgentKnowledge {
   };
 }
 
-function emptyAlias(): SqlAgentAlias {
+function emptyAlias(): QueryKnowledgeAlias {
   return { table: "", column: "", name: "", synonyms: [], description: "" };
 }
 
-function emptyTerm(): SqlAgentTerm {
+function emptyTerm(): QueryKnowledgeTerm {
   return { name: "", synonyms: [], description: "" };
 }
 
-function emptyRelation(): SqlAgentRelation {
+function emptyRelation(): QueryKnowledgeRelation {
   return { table: "", column: "", targetTable: "", targetColumn: "" };
 }
 
 export function KnowledgeEditor({
-  sourceId,
-  catalog,
+  databaseId,
+  revision,
+  knowledge,
+  tables,
   disabled = false,
   onSaved,
   onDirtyChange,
 }: KnowledgeEditorProps) {
   const [sendToast] = useToast();
   const [tab, setTab] = useState<TabKey>("aliases");
-  const [draft, setDraft] = useState<SqlAgentKnowledge>(() =>
-    cloneKnowledge(catalog.knowledge),
+  const [draft, setDraft] = useState<QueryKnowledgeBody>(() =>
+    cloneKnowledge(knowledge),
   );
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const tableOptions = useMemo(
-    () => catalog.tables.map((table) => ({ value: table.name, label: table.name })),
-    [catalog.tables],
+    () => tables.map((table) => ({ value: table.name, label: table.name })),
+    [tables],
   );
 
   const columnsOf = useCallback(
     (table: string) =>
-      (catalog.tables.find((item) => item.name === table)?.columns ?? []).map(
+      (tables.find((item) => item.name === table)?.columns ?? []).map(
         (column) => ({ value: column.name, label: column.name }),
       ),
-    [catalog.tables],
+    [tables],
   );
 
   const markDirty = useCallback(
-    (next: SqlAgentKnowledge) => {
+    (next: QueryKnowledgeBody) => {
       setDraft(next);
       setDirty(true);
       onDirtyChange?.(true);
@@ -101,31 +105,34 @@ export function KnowledgeEditor({
   );
 
   const reset = useCallback(() => {
-    setDraft(cloneKnowledge(catalog.knowledge));
+    setDraft(cloneKnowledge(knowledge));
     setDirty(false);
     setError("");
     onDirtyChange?.(false);
-  }, [catalog.knowledge, onDirtyChange]);
+  }, [knowledge, onDirtyChange]);
 
   useEffect(() => {
     reset();
   }, [reset]);
 
-  const save = async () => {
+  const save = async (reindex: boolean) => {
     setSaving(true);
     setError("");
     try {
-      const state = await saveSqlAgentKnowledge(
-        sourceId,
-        catalog.revision,
+      const state = await saveQueryKnowledge(
+        databaseId,
+        revision,
         draft,
+        reindex,
       );
       onSaved(state);
       setDirty(false);
       onDirtyChange?.(false);
-      sendToast({ message: t`Knowledge saved` });
+      sendToast({
+        message: reindex ? t`已保存并重建索引` : t`知识已保存`,
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t`Save failed`);
+      setError(err instanceof Error ? err.message : t`保存失败`);
     } finally {
       setSaving(false);
     }
@@ -137,42 +144,53 @@ export function KnowledgeEditor({
     <Stack gap="md">
       <Group justify="space-between" align="center">
         <Text fw="bold" size="lg">
-          {t`Query knowledge`}
+          {t`查询知识`}
         </Text>
         <Group gap="sm">
           {dirty && (
             <Button disabled={locked} onClick={reset}>
-              {t`Discard`}
+              {t`丢弃更改`}
             </Button>
           )}
+          <Button
+            variant="default"
+            disabled={!dirty || locked}
+            loading={saving}
+            onClick={() => void save(false)}
+          >
+            {t`保存`}
+          </Button>
           <Button
             variant="filled"
             disabled={!dirty || locked}
             loading={saving}
-            onClick={() => void save()}
+            onClick={() => void save(true)}
           >
-            {t`Save`}
+            {t`保存并重建索引`}
           </Button>
         </Group>
       </Group>
 
       {error && <Text c="error">{error}</Text>}
-      {!catalog.tables.length && (
+      {!tables.length && (
         <Text c="text-secondary">
-          {t`Sync schema first, then configure synonyms and relations.`}
+          {t`当前数据库尚无可用表。请先在「数据库」中完成同步，再配置同义词与关联。`}
         </Text>
       )}
 
-      <Tabs value={tab} onChange={(value) => setTab((value as TabKey) ?? "aliases")}>
+      <Tabs
+        value={tab}
+        onChange={(value) => setTab((value as TabKey) ?? "aliases")}
+      >
         <Tabs.List>
-          <Tabs.Tab value="aliases">{t`Table / field synonyms`}</Tabs.Tab>
-          <Tabs.Tab value="terms">{t`Business metrics`}</Tabs.Tab>
-          <Tabs.Tab value="relations">{t`Logical joins`}</Tabs.Tab>
+          <Tabs.Tab value="aliases">{t`表 / 字段同义词`}</Tabs.Tab>
+          <Tabs.Tab value="terms">{t`业务口径`}</Tabs.Tab>
+          <Tabs.Tab value="relations">{t`逻辑关联`}</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="aliases" pt="md">
           <Text c="text-secondary" mb="md" size="sm">
-            {t`Leave field empty to map the business name to the whole table. Description can capture meaning or status codes.`}
+            {t`字段留空表示业务名映射到整张表。描述可记录含义或状态码说明。`}
           </Text>
           <Stack gap="lg">
             {draft.aliases.map((item, index) => (
@@ -187,7 +205,7 @@ export function KnowledgeEditor({
                 <Stack gap="sm">
                   <Group grow align="flex-start">
                     <Select
-                      label={t`Table`}
+                      label={t`表`}
                       data={tableOptions}
                       value={item.table || null}
                       disabled={locked}
@@ -203,13 +221,13 @@ export function KnowledgeEditor({
                       }}
                     />
                     <Select
-                      label={t`Column`}
+                      label={t`字段`}
                       data={columnsOf(item.table)}
                       value={item.column || null}
                       disabled={locked || !item.table}
                       clearable
                       searchable
-                      placeholder={t`Whole table`}
+                      placeholder={t`整表`}
                       onChange={(value) => {
                         const next = cloneKnowledge(draft);
                         next.aliases[index] = {
@@ -221,7 +239,7 @@ export function KnowledgeEditor({
                     />
                   </Group>
                   <TextInput
-                    label={t`Business name`}
+                    label={t`业务名称`}
                     value={item.name}
                     disabled={locked}
                     onChange={(event) => {
@@ -234,10 +252,10 @@ export function KnowledgeEditor({
                     }}
                   />
                   <TagsInput
-                    label={t`Synonyms`}
+                    label={t`同义词`}
                     value={item.synonyms}
                     disabled={locked}
-                    placeholder={t`Press Enter to add`}
+                    placeholder={t`回车添加`}
                     onChange={(value) => {
                       const next = cloneKnowledge(draft);
                       next.aliases[index] = {
@@ -248,7 +266,7 @@ export function KnowledgeEditor({
                     }}
                   />
                   <Textarea
-                    label={t`Description`}
+                    label={t`描述`}
                     value={item.description}
                     disabled={locked}
                     minRows={2}
@@ -272,24 +290,29 @@ export function KnowledgeEditor({
                       markDirty(next);
                     }}
                   >
-                    {t`Remove`}
+                    {t`删除`}
                   </Button>
                 </Stack>
               </Box>
             ))}
             <Button
               w="fit-content"
-              disabled={locked || !catalog.tables.length}
-              onClick={() => markDirty({ ...draft, aliases: [...draft.aliases, emptyAlias()] })}
+              disabled={locked || !tables.length}
+              onClick={() =>
+                markDirty({
+                  ...draft,
+                  aliases: [...draft.aliases, emptyAlias()],
+                })
+              }
             >
-              {t`Add synonym`}
+              {t`添加同义词`}
             </Button>
           </Stack>
         </Tabs.Panel>
 
         <Tabs.Panel value="terms" pt="md">
           <Text c="text-secondary" mb="md" size="sm">
-            {t`Document formulas, physical fields, filters, and time grain. Names and synonyms both participate in retrieval.`}
+            {t`记录计算公式、物理字段、过滤条件与时间粒度。名称与同义词都会参与召回。`}
           </Text>
           <Stack gap="lg">
             {draft.terms.map((item, index) => (
@@ -303,7 +326,7 @@ export function KnowledgeEditor({
               >
                 <Stack gap="sm">
                   <TextInput
-                    label={t`Term name`}
+                    label={t`口径名称`}
                     value={item.name}
                     disabled={locked}
                     onChange={(event) => {
@@ -316,10 +339,10 @@ export function KnowledgeEditor({
                     }}
                   />
                   <TagsInput
-                    label={t`Synonyms`}
+                    label={t`同义词`}
                     value={item.synonyms}
                     disabled={locked}
-                    placeholder={t`Press Enter to add`}
+                    placeholder={t`回车添加`}
                     onChange={(value) => {
                       const next = cloneKnowledge(draft);
                       next.terms[index] = {
@@ -330,7 +353,7 @@ export function KnowledgeEditor({
                     }}
                   />
                   <Textarea
-                    label={t`Definition`}
+                    label={t`定义`}
                     value={item.description}
                     disabled={locked}
                     minRows={3}
@@ -354,7 +377,7 @@ export function KnowledgeEditor({
                       markDirty(next);
                     }}
                   >
-                    {t`Remove`}
+                    {t`删除`}
                   </Button>
                 </Stack>
               </Box>
@@ -362,16 +385,18 @@ export function KnowledgeEditor({
             <Button
               w="fit-content"
               disabled={locked}
-              onClick={() => markDirty({ ...draft, terms: [...draft.terms, emptyTerm()] })}
+              onClick={() =>
+                markDirty({ ...draft, terms: [...draft.terms, emptyTerm()] })
+              }
             >
-              {t`Add metric`}
+              {t`添加口径`}
             </Button>
           </Stack>
         </Tabs.Panel>
 
         <Tabs.Panel value="relations" pt="md">
           <Text c="text-secondary" mb="md" size="sm">
-            {t`Add logical joins not declared as foreign keys. Physical FKs are imported on schema sync.`}
+            {t`补充未声明为外键的逻辑关联。物理外键会随元数据同步自动带入。`}
           </Text>
           <Stack gap="lg">
             {draft.relations.map((item, index) => (
@@ -386,7 +411,7 @@ export function KnowledgeEditor({
                 <Stack gap="sm">
                   <Group grow align="flex-start">
                     <Select
-                      label={t`Source table`}
+                      label={t`源表`}
                       data={tableOptions}
                       value={item.table || null}
                       disabled={locked}
@@ -402,7 +427,7 @@ export function KnowledgeEditor({
                       }}
                     />
                     <Select
-                      label={t`Source column`}
+                      label={t`源字段`}
                       data={columnsOf(item.table)}
                       value={item.column || null}
                       disabled={locked || !item.table}
@@ -419,7 +444,7 @@ export function KnowledgeEditor({
                   </Group>
                   <Group grow align="flex-start">
                     <Select
-                      label={t`Target table`}
+                      label={t`目标表`}
                       data={tableOptions}
                       value={item.targetTable || null}
                       disabled={locked}
@@ -435,7 +460,7 @@ export function KnowledgeEditor({
                       }}
                     />
                     <Select
-                      label={t`Target column`}
+                      label={t`目标字段`}
                       data={columnsOf(item.targetTable)}
                       value={item.targetColumn || null}
                       disabled={locked || !item.targetTable}
@@ -461,14 +486,14 @@ export function KnowledgeEditor({
                       markDirty(next);
                     }}
                   >
-                    {t`Remove`}
+                    {t`删除`}
                   </Button>
                 </Stack>
               </Box>
             ))}
             <Button
               w="fit-content"
-              disabled={locked || !catalog.tables.length}
+              disabled={locked || !tables.length}
               onClick={() =>
                 markDirty({
                   ...draft,
@@ -476,7 +501,7 @@ export function KnowledgeEditor({
                 })
               }
             >
-              {t`Add relation`}
+              {t`添加关联`}
             </Button>
           </Stack>
         </Tabs.Panel>

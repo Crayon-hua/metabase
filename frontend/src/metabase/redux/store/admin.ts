@@ -10,7 +10,6 @@ export type AdminPathKey =
   | "data-model"
   | "settings"
   | "metabot"
-  | "sql-agent"
   | "people"
   | "databases"
   | "permissions"

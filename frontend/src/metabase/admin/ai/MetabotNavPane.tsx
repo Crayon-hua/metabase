@@ -37,6 +37,11 @@ export function MetabotNavPane() {
             path="/admin/metabot/mcp/authorizations"
           />
         </AdminNavItem>
+        <AdminNavItem
+          icon="table"
+          label={t`知识配置`}
+          path="/admin/metabot/knowledge"
+        />
         {AiControlsNavItems}
       </AdminNavWrapper>
     </Flex>

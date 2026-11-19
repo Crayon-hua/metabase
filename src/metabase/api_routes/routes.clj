@@ -34,6 +34,7 @@
    [metabase.frontend-errors.api]
    [metabase.geojson.api]
    [metabase.glossary.api]
+   [metabase.query-knowledge.api]
    [metabase.health-inspector.api]
    [metabase.indexed-entities.api]
    [metabase.indexes-rest.api]
@@ -106,6 +107,7 @@
          metabase.frontend-errors.api/keep-me
          metabase.geojson.api/keep-me
          metabase.glossary.api/keep-me
+         metabase.query-knowledge.api/keep-me
          metabase.indexed-entities.api/keep-me
          metabase.indexes-rest.api/keep-me
          metabase.logger.api/keep-me
@@ -249,6 +251,7 @@
    "/frontend-errors"      metabase.frontend-errors.api/routes
    "/geojson"              'metabase.geojson.api
    "/glossary"             (+auth 'metabase.glossary.api)
+   "/query-knowledge"      (+auth 'metabase.query-knowledge.api)
    "/google"               (+auth metabase.sso.api/google-auth-routes)
    "/health-inspector"     (+auth 'metabase.health-inspector.api)
    "/index"                (+auth 'metabase.indexes-rest.api)
