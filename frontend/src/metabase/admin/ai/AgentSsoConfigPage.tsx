@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { t } from "ttag";
 
 import { useToast } from "metabase/common/hooks";
@@ -20,6 +20,13 @@ import {
   TextInput,
 } from "metabase/ui";
 
+function readInputValue(
+  event: ChangeEvent<HTMLInputElement> | null | undefined,
+): string {
+  const target = event?.currentTarget ?? event?.target ?? null;
+  return target?.value ?? "";
+}
+
 export function AgentSsoConfigPage() {
   const [sendToast] = useToast();
   const [busy, setBusy] = useState(false);
@@ -36,27 +43,38 @@ export function AgentSsoConfigPage() {
   });
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
       setBusy(true);
       setError("");
       try {
         const settings = await getExternalAgentSettings();
+        if (cancelled) {
+          return;
+        }
         setDraft({
-          api_base: settings.api_base ?? "",
-          ui_origin: settings.ui_origin || "https://agent.whaee.com",
-          ui_base: settings.ui_base ?? "",
-          agent_id: settings.agent_id ?? "",
-          api_key_configured: Boolean(settings.api_key_configured),
-          enabled: Boolean(settings.enabled),
+          api_base: settings?.api_base ?? "",
+          ui_origin: settings?.ui_origin || "https://agent.whaee.com",
+          ui_base: settings?.ui_base ?? "",
+          agent_id: settings?.agent_id ?? "",
+          api_key_configured: Boolean(settings?.api_key_configured),
+          enabled: Boolean(settings?.enabled),
         });
         setApiKeyDraft("");
         setDirty(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : t`加载失败`);
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : t`加载失败`);
+        }
       } finally {
-        setBusy(false);
+        if (!cancelled) {
+          setBusy(false);
+        }
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const save = async () => {
@@ -74,12 +92,12 @@ export function AgentSsoConfigPage() {
       }
       const next = await saveExternalAgentSettings(payload);
       setDraft({
-        api_base: next.api_base ?? "",
-        ui_origin: next.ui_origin || "https://agent.whaee.com",
-        ui_base: next.ui_base ?? "",
-        agent_id: next.agent_id ?? "",
-        api_key_configured: Boolean(next.api_key_configured),
-        enabled: Boolean(next.enabled),
+        api_base: next?.api_base ?? "",
+        ui_origin: next?.ui_origin || "https://agent.whaee.com",
+        ui_base: next?.ui_base ?? "",
+        agent_id: next?.agent_id ?? "",
+        api_key_configured: Boolean(next?.api_key_configured),
+        enabled: Boolean(next?.enabled),
       });
       setApiKeyDraft("");
       setDirty(false);
@@ -89,6 +107,11 @@ export function AgentSsoConfigPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const updateDraft = (key: keyof typeof draft, value: string) => {
+    setDraft((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
   };
 
   return (
@@ -105,26 +128,18 @@ export function AgentSsoConfigPage() {
               placeholder="https://agent.whaee.com/api/v1"
               value={draft.api_base}
               disabled={busy}
-              onChange={(event) => {
-                setDraft((prev) => ({
-                  ...prev,
-                  api_base: event.currentTarget.value,
-                }));
-                setDirty(true);
-              }}
+              onChange={(event) =>
+                updateDraft("api_base", readInputValue(event))
+              }
             />
             <TextInput
               label={t`UI Origin`}
               placeholder="https://agent.whaee.com"
               value={draft.ui_origin}
               disabled={busy}
-              onChange={(event) => {
-                setDraft((prev) => ({
-                  ...prev,
-                  ui_origin: event.currentTarget.value,
-                }));
-                setDirty(true);
-              }}
+              onChange={(event) =>
+                updateDraft("ui_origin", readInputValue(event))
+              }
             />
           </Group>
 
@@ -134,25 +149,17 @@ export function AgentSsoConfigPage() {
               placeholder="/"
               value={draft.ui_base}
               disabled={busy}
-              onChange={(event) => {
-                setDraft((prev) => ({
-                  ...prev,
-                  ui_base: event.currentTarget.value,
-                }));
-                setDirty(true);
-              }}
+              onChange={(event) =>
+                updateDraft("ui_base", readInputValue(event))
+              }
             />
             <TextInput
               label={t`Agent ID`}
               value={draft.agent_id}
               disabled={busy}
-              onChange={(event) => {
-                setDraft((prev) => ({
-                  ...prev,
-                  agent_id: event.currentTarget.value,
-                }));
-                setDirty(true);
-              }}
+              onChange={(event) =>
+                updateDraft("agent_id", readInputValue(event))
+              }
             />
           </Group>
 
@@ -166,7 +173,7 @@ export function AgentSsoConfigPage() {
             value={apiKeyDraft}
             disabled={busy}
             onChange={(event) => {
-              setApiKeyDraft(event.currentTarget.value);
+              setApiKeyDraft(readInputValue(event));
               setDirty(true);
             }}
           />

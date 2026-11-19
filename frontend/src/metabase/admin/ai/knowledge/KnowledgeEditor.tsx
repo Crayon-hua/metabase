@@ -1,5 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { t } from "ttag";
+
+function readInputValue(
+  event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | null | undefined,
+): string {
+  const target = event?.currentTarget ?? event?.target ?? null;
+  return target?.value ?? "";
+}
 
 import { useToast } from "metabase/common/hooks";
 import {
@@ -255,7 +268,7 @@ export function KnowledgeEditor({
                       const next = cloneKnowledge(draft);
                       next.aliases[index] = {
                         ...next.aliases[index],
-                        name: event.currentTarget.value,
+                        name: readInputValue(event),
                       };
                       markDirty(next);
                     }}
@@ -287,7 +300,7 @@ export function KnowledgeEditor({
                       const next = cloneKnowledge(draft);
                       next.aliases[index] = {
                         ...next.aliases[index],
-                        description: event.currentTarget.value,
+                        description: readInputValue(event),
                       };
                       markDirty(next);
                     }}
@@ -346,7 +359,7 @@ export function KnowledgeEditor({
                       const next = cloneKnowledge(draft);
                       next.terms[index] = {
                         ...next.terms[index],
-                        name: event.currentTarget.value,
+                        name: readInputValue(event),
                       };
                       markDirty(next);
                     }}
@@ -378,7 +391,7 @@ export function KnowledgeEditor({
                       const next = cloneKnowledge(draft);
                       next.terms[index] = {
                         ...next.terms[index],
-                        description: event.currentTarget.value,
+                        description: readInputValue(event),
                       };
                       markDirty(next);
                     }}

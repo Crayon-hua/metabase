@@ -1,5 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { t } from "ttag";
+
+function readInputValue(
+  event: ChangeEvent<HTMLInputElement> | null | undefined,
+): string {
+  const target = event?.currentTarget ?? event?.target ?? null;
+  return target?.value ?? "";
+}
 
 import { useListDatabasesQuery } from "metabase/api";
 import { useToast } from "metabase/common/hooks";
@@ -220,7 +233,7 @@ export function KnowledgeConfigPage() {
                 onChange={(event) => {
                   setEmbedDraft((prev) => ({
                     ...prev,
-                    base_url: event.currentTarget.value,
+                    base_url: readInputValue(event),
                   }));
                   setEmbedDirty(true);
                 }}
@@ -233,7 +246,7 @@ export function KnowledgeConfigPage() {
                 onChange={(event) => {
                   setEmbedDraft((prev) => ({
                     ...prev,
-                    model: event.currentTarget.value,
+                    model: readInputValue(event),
                   }));
                   setEmbedDirty(true);
                 }}
@@ -249,7 +262,7 @@ export function KnowledgeConfigPage() {
               value={apiKeyDraft}
               disabled={busy !== null || dirty}
               onChange={(event) => {
-                setApiKeyDraft(event.currentTarget.value);
+                setApiKeyDraft(readInputValue(event));
                 setEmbedDirty(true);
               }}
             />
