@@ -158,7 +158,11 @@
    "https://www.metabase.com/"
    "https://metabase.com/"
    ;; Whaee Agent sidebar (replaces native Metabot chat).
-   "https://agent.whaee.com"])
+   "https://agent.whaee.com"
+   ;; Feishu OAuth pages may briefly navigate the agent iframe; still prefer popup login.
+   "https://accounts.feishu.cn"
+   "https://open.feishu.cn"
+   "https://passport.feishu.cn"])
 
 (def ^:private always-allowed-resource-hosts
   "Implicitly-allowed `img-src`/`font-src` hosts: our own origin and `data:` URIs."

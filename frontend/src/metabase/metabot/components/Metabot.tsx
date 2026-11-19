@@ -81,13 +81,25 @@ export const MetabotAuthenticated = ({ hide, config }: MetabotProps) => {
           style={{ borderBottom: "1px solid var(--mb-color-border)" }}
         >
           <Text fw="bold">{EXTERNAL_AGENT_NAME}</Text>
-          <ActionIcon
-            onClick={() => setVisible(false)}
-            aria-label={t`Close`}
-            data-testid="metabot-close-chat"
-          >
-            <Icon c="text-primary" name="close" />
-          </ActionIcon>
+          <Flex gap="sm" align="center">
+            <ActionIcon
+              component="a"
+              href={EXTERNAL_AGENT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t`在新窗口打开`}
+              title={t`在新窗口打开（飞书登录如被屏蔽请用此入口）`}
+            >
+              <Icon c="text-primary" name="external" />
+            </ActionIcon>
+            <ActionIcon
+              onClick={() => setVisible(false)}
+              aria-label={t`Close`}
+              data-testid="metabot-close-chat"
+            >
+              <Icon c="text-primary" name="close" />
+            </ActionIcon>
+          </Flex>
         </Flex>
         <Box flex="1" mih={0}>
           <Box

@@ -65,7 +65,12 @@ export function KnowledgeConfigPage() {
     try {
       const next = await getQueryKnowledge(id);
       setState(next);
-      setEmbedDraft(next.embedding);
+      setEmbedDraft({
+        base_url: next.embedding?.base_url ?? "",
+        model: next.embedding?.model ?? "",
+        api_key_configured: Boolean(next.embedding?.api_key_configured),
+        configured: Boolean(next.embedding?.configured),
+      });
       setApiKeyDraft("");
       setEmbedDirty(false);
       setDirty(false);
@@ -107,7 +112,12 @@ export function KnowledgeConfigPage() {
         payload.api_key = apiKeyDraft;
       }
       const next = await saveEmbeddingSettings(payload);
-      setEmbedDraft(next);
+      setEmbedDraft({
+        base_url: next?.base_url ?? "",
+        model: next?.model ?? "",
+        api_key_configured: Boolean(next?.api_key_configured),
+        configured: Boolean(next?.configured),
+      });
       setApiKeyDraft("");
       setEmbedDirty(false);
       sendToast({ message: t`Embedding 设置已保存` });
@@ -218,7 +228,7 @@ export function KnowledgeConfigPage() {
                 {t`保存 Embedding`}
               </Button>
               {embedDraft.configured ? (
-                <Badge color="success">{t`已配置`}</Badge>
+                <Badge color="positive">{t`已配置`}</Badge>
               ) : (
                 <Badge color="warning">{t`未配置（仅关键词召回）`}</Badge>
               )}
@@ -243,7 +253,7 @@ export function KnowledgeConfigPage() {
             />
             <Group gap="sm">
               {state && (
-                <Badge color={state.index.ready ? "success" : "warning"}>
+                <Badge color={state.index.ready ? "positive" : "warning"}>
                   {state.index.ready
                     ? `${t`索引就绪`} (${state.index.document_count})`
                     : t`索引未就绪`}

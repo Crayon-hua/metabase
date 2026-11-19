@@ -281,7 +281,7 @@ export function KnowledgeEditor({
                   />
                   <Button
                     w="fit-content"
-                    color="error"
+                    color="negative"
                     variant="subtle"
                     disabled={locked}
                     onClick={() => {
@@ -368,7 +368,7 @@ export function KnowledgeEditor({
                   />
                   <Button
                     w="fit-content"
-                    color="error"
+                    color="negative"
                     variant="subtle"
                     disabled={locked}
                     onClick={() => {
@@ -477,7 +477,7 @@ export function KnowledgeEditor({
                   </Group>
                   <Button
                     w="fit-content"
-                    color="error"
+                    color="negative"
                     variant="subtle"
                     disabled={locked}
                     onClick={() => {
