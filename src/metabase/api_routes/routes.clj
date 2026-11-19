@@ -35,6 +35,7 @@
    [metabase.geojson.api]
    [metabase.glossary.api]
    [metabase.query-knowledge.api]
+   [metabase.external-agent.api]
    [metabase.health-inspector.api]
    [metabase.indexed-entities.api]
    [metabase.indexes-rest.api]
@@ -108,6 +109,7 @@
          metabase.geojson.api/keep-me
          metabase.glossary.api/keep-me
          metabase.query-knowledge.api/keep-me
+         metabase.external-agent.api/keep-me
          metabase.indexed-entities.api/keep-me
          metabase.indexes-rest.api/keep-me
          metabase.logger.api/keep-me
@@ -252,6 +254,7 @@
    "/geojson"              'metabase.geojson.api
    "/glossary"             (+auth 'metabase.glossary.api)
    "/query-knowledge"      (+auth 'metabase.query-knowledge.api)
+   "/external-agent"       (+auth 'metabase.external-agent.api)
    "/google"               (+auth metabase.sso.api/google-auth-routes)
    "/health-inspector"     (+auth 'metabase.health-inspector.api)
    "/index"                (+auth 'metabase.indexes-rest.api)

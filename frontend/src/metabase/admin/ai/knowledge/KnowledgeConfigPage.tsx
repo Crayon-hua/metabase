@@ -19,6 +19,10 @@ import {
 } from "metabase/ui";
 
 import {
+  getExternalAgentSettings,
+  saveExternalAgentSettings,
+} from "metabase/metabot/externalAgentApi";
+import {
   getQueryKnowledge,
   reindexQueryKnowledge,
   saveEmbeddingSettings,
@@ -40,7 +44,9 @@ export function KnowledgeConfigPage() {
 
   const [databaseId, setDatabaseId] = useState<number | null>(null);
   const [state, setState] = useState<QueryKnowledgeState | null>(null);
-  const [busy, setBusy] = useState<"load" | "reindex" | "embed" | null>(null);
+  const [busy, setBusy] = useState<
+    "load" | "reindex" | "embed" | "agent" | null
+  >(null);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState("");
 
@@ -52,6 +58,35 @@ export function KnowledgeConfigPage() {
   });
   const [apiKeyDraft, setApiKeyDraft] = useState("");
   const [embedDirty, setEmbedDirty] = useState(false);
+
+  const [agentDraft, setAgentDraft] = useState({
+    api_base: "",
+    ui_origin: "https://agent.whaee.com",
+    ui_base: "",
+    agent_id: "",
+    api_key_configured: false,
+    enabled: false,
+  });
+  const [agentApiKeyDraft, setAgentApiKeyDraft] = useState("");
+  const [agentDirty, setAgentDirty] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const settings = await getExternalAgentSettings();
+        setAgentDraft({
+          api_base: settings.api_base ?? "",
+          ui_origin: settings.ui_origin || "https://agent.whaee.com",
+          ui_base: settings.ui_base ?? "",
+          agent_id: settings.agent_id ?? "",
+          api_key_configured: Boolean(settings.api_key_configured),
+          enabled: Boolean(settings.enabled),
+        });
+      } catch {
+        // Superuser-only; ignore for non-admin edge cases
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (databaseId == null && databases.length > 0) {
@@ -154,15 +189,145 @@ export function KnowledgeConfigPage() {
     }
   };
 
-  const locked = busy !== null || dirty || embedDirty;
+  const saveAgent = async () => {
+    setBusy("agent");
+    setError("");
+    try {
+      const payload: Parameters<typeof saveExternalAgentSettings>[0] = {
+        api_base: agentDraft.api_base,
+        ui_origin: agentDraft.ui_origin,
+        ui_base: agentDraft.ui_base,
+        agent_id: agentDraft.agent_id,
+      };
+      if (agentApiKeyDraft) {
+        payload.api_key = agentApiKeyDraft;
+      }
+      const next = await saveExternalAgentSettings(payload);
+      setAgentDraft({
+        api_base: next.api_base ?? "",
+        ui_origin: next.ui_origin || "https://agent.whaee.com",
+        ui_base: next.ui_base ?? "",
+        agent_id: next.agent_id ?? "",
+        api_key_configured: Boolean(next.api_key_configured),
+        enabled: Boolean(next.enabled),
+      });
+      setAgentApiKeyDraft("");
+      setAgentDirty(false);
+      sendToast({ message: t`Agent iframe SSO 已保存` });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t`保存 Agent 配置失败`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const locked = busy !== null || dirty || embedDirty || agentDirty;
 
   return (
     <SettingsPageWrapper title={t`知识配置`}>
       <SettingsSection>
         <Stack gap="lg">
           <Text c="text-secondary">
-            {t`为外部 Agent 配置同义词、业务口径与逻辑关联。元数据直接使用 Metabase 已同步的数据库表字段；召回通过 Metabase MCP 的 retrieve_query_evidence 提供，不在此生成 SQL。`}
+            {t`为外部 Agent 配置同义词、业务口径与逻辑关联。元数据直接使用 Metabase 已同步的数据库表字段；召回通过 Metabase MCP 的 retrieve_query_evidence 提供，不在此生成 SQL。右上角 Agent 侧栏使用与营销云相同的 chatbox + 短票嵌入，无需在 iframe 内飞书登录。`}
           </Text>
+
+          <Stack
+            gap="sm"
+            p="md"
+            style={{
+              border: "1px solid var(--mb-color-border)",
+              borderRadius: 8,
+            }}
+          >
+            <Text fw="bold">{t`Agent iframe SSO`}</Text>
+            <Text c="text-secondary" size="sm">
+              {t`与营销云一致：服务端用 X-API-Key 签发短票，侧栏打开 /chatbox#token=…。API Base 形如 https://agent.whaee.com/api/v1`}
+            </Text>
+            <Group grow align="flex-start">
+              <TextInput
+                label={t`API Base`}
+                placeholder="https://agent.whaee.com/api/v1"
+                value={agentDraft.api_base}
+                disabled={busy !== null}
+                onChange={(event) => {
+                  setAgentDraft((prev) => ({
+                    ...prev,
+                    api_base: event.currentTarget.value,
+                  }));
+                  setAgentDirty(true);
+                }}
+              />
+              <TextInput
+                label={t`UI Origin`}
+                placeholder="https://agent.whaee.com"
+                value={agentDraft.ui_origin}
+                disabled={busy !== null}
+                onChange={(event) => {
+                  setAgentDraft((prev) => ({
+                    ...prev,
+                    ui_origin: event.currentTarget.value,
+                  }));
+                  setAgentDirty(true);
+                }}
+              />
+            </Group>
+            <Group grow align="flex-start">
+              <TextInput
+                label={t`UI Base（可选）`}
+                placeholder="/"
+                value={agentDraft.ui_base}
+                disabled={busy !== null}
+                onChange={(event) => {
+                  setAgentDraft((prev) => ({
+                    ...prev,
+                    ui_base: event.currentTarget.value,
+                  }));
+                  setAgentDirty(true);
+                }}
+              />
+              <TextInput
+                label={t`Agent ID`}
+                value={agentDraft.agent_id}
+                disabled={busy !== null}
+                onChange={(event) => {
+                  setAgentDraft((prev) => ({
+                    ...prev,
+                    agent_id: event.currentTarget.value,
+                  }));
+                  setAgentDirty(true);
+                }}
+              />
+            </Group>
+            <PasswordInput
+              label={t`平台 API Key`}
+              placeholder={
+                agentDraft.api_key_configured
+                  ? t`已配置（留空则不修改）`
+                  : t`共享账号 X-API-Key`
+              }
+              value={agentApiKeyDraft}
+              disabled={busy !== null}
+              onChange={(event) => {
+                setAgentApiKeyDraft(event.currentTarget.value);
+                setAgentDirty(true);
+              }}
+            />
+            <Group>
+              <Button
+                variant="filled"
+                disabled={!agentDirty || busy !== null}
+                loading={busy === "agent"}
+                onClick={() => void saveAgent()}
+              >
+                {t`保存 Agent SSO`}
+              </Button>
+              {agentDraft.enabled ? (
+                <Badge color="positive">{t`侧栏可用`}</Badge>
+              ) : (
+                <Badge color="warning">{t`未配齐`}</Badge>
+              )}
+            </Group>
+          </Stack>
 
           <Stack
             gap="sm"
