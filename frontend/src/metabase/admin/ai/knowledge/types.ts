@@ -42,8 +42,11 @@ export type QueryKnowledgeTable = {
 
 export type QueryKnowledgeIndexStatus = {
   document_count: number;
+  table_count?: number;
   ready: boolean;
   configured: boolean;
+  /** embedding-not-configured | no-synced-tables | no-documents | embedding-model-mismatch */
+  not_ready_reason?: string | null;
 };
 
 export type EmbeddingSettings = {

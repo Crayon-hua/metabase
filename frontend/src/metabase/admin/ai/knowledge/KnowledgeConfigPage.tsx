@@ -11,17 +11,15 @@ import {
   Badge,
   Button,
   Group,
+  Icon,
   PasswordInput,
   Select,
   Stack,
   Text,
   TextInput,
+  Tooltip,
 } from "metabase/ui";
 
-import {
-  getExternalAgentSettings,
-  saveExternalAgentSettings,
-} from "metabase/metabot/externalAgentApi";
 import {
   getQueryKnowledge,
   reindexQueryKnowledge,
@@ -29,6 +27,29 @@ import {
 } from "./api";
 import { KnowledgeEditor } from "./KnowledgeEditor";
 import type { EmbeddingSettings, QueryKnowledgeState } from "./types";
+
+function indexNotReadyMessage(
+  reason: string | null | undefined,
+  documentCount: number,
+  tableCount: number,
+): string {
+  switch (reason) {
+    case "embedding-not-configured":
+      return t`未配置 Embedding（需填写 Base URL 与模型）`;
+    case "no-synced-tables":
+      return t`数据库尚未同步出表，请先在「数据库」中完成 Sync`;
+    case "no-documents":
+      return tableCount > 0
+        ? t`尚未生成向量文档（表 ${tableCount} 张）。请点击「重建索引」`
+        : t`尚未生成向量文档，请先同步表后再重建索引`;
+    case "embedding-model-mismatch":
+      return t`Embedding 配置已变更，与现有索引不一致，请重新「重建索引」`;
+    default:
+      return documentCount > 0
+        ? t`索引未就绪（文档 ${documentCount}）`
+        : t`索引未就绪`;
+  }
+}
 
 export function KnowledgeConfigPage() {
   const [sendToast] = useToast();
@@ -44,9 +65,7 @@ export function KnowledgeConfigPage() {
 
   const [databaseId, setDatabaseId] = useState<number | null>(null);
   const [state, setState] = useState<QueryKnowledgeState | null>(null);
-  const [busy, setBusy] = useState<
-    "load" | "reindex" | "embed" | "agent" | null
-  >(null);
+  const [busy, setBusy] = useState<"load" | "reindex" | "embed" | null>(null);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState("");
 
@@ -58,35 +77,6 @@ export function KnowledgeConfigPage() {
   });
   const [apiKeyDraft, setApiKeyDraft] = useState("");
   const [embedDirty, setEmbedDirty] = useState(false);
-
-  const [agentDraft, setAgentDraft] = useState({
-    api_base: "",
-    ui_origin: "https://agent.whaee.com",
-    ui_base: "",
-    agent_id: "",
-    api_key_configured: false,
-    enabled: false,
-  });
-  const [agentApiKeyDraft, setAgentApiKeyDraft] = useState("");
-  const [agentDirty, setAgentDirty] = useState(false);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const settings = await getExternalAgentSettings();
-        setAgentDraft({
-          api_base: settings.api_base ?? "",
-          ui_origin: settings.ui_origin || "https://agent.whaee.com",
-          ui_base: settings.ui_base ?? "",
-          agent_id: settings.agent_id ?? "",
-          api_key_configured: Boolean(settings.api_key_configured),
-          enabled: Boolean(settings.enabled),
-        });
-      } catch {
-        // Superuser-only; ignore for non-admin edge cases
-      }
-    })();
-  }, []);
 
   useEffect(() => {
     if (databaseId == null && databases.length > 0) {
@@ -179,8 +169,18 @@ export function KnowledgeConfigPage() {
         sendToast({
           message: t`未配置 Embedding，已跳过重建索引`,
         });
+      } else if ((next.index?.document_count ?? 0) <= 0) {
+        sendToast({
+          message: indexNotReadyMessage(
+            next.index?.not_ready_reason,
+            next.index?.document_count ?? 0,
+            next.index?.table_count ?? 0,
+          ),
+        });
       } else {
-        sendToast({ message: t`索引已重建` });
+        sendToast({
+          message: `${t`索引已重建`} (${next.index.document_count})`,
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t`重建索引失败`);
@@ -189,145 +189,15 @@ export function KnowledgeConfigPage() {
     }
   };
 
-  const saveAgent = async () => {
-    setBusy("agent");
-    setError("");
-    try {
-      const payload: Parameters<typeof saveExternalAgentSettings>[0] = {
-        api_base: agentDraft.api_base,
-        ui_origin: agentDraft.ui_origin,
-        ui_base: agentDraft.ui_base,
-        agent_id: agentDraft.agent_id,
-      };
-      if (agentApiKeyDraft) {
-        payload.api_key = agentApiKeyDraft;
-      }
-      const next = await saveExternalAgentSettings(payload);
-      setAgentDraft({
-        api_base: next.api_base ?? "",
-        ui_origin: next.ui_origin || "https://agent.whaee.com",
-        ui_base: next.ui_base ?? "",
-        agent_id: next.agent_id ?? "",
-        api_key_configured: Boolean(next.api_key_configured),
-        enabled: Boolean(next.enabled),
-      });
-      setAgentApiKeyDraft("");
-      setAgentDirty(false);
-      sendToast({ message: t`Agent iframe SSO 已保存` });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t`保存 Agent 配置失败`);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const locked = busy !== null || dirty || embedDirty || agentDirty;
+  const locked = busy !== null || dirty || embedDirty;
 
   return (
     <SettingsPageWrapper title={t`知识配置`}>
       <SettingsSection>
         <Stack gap="lg">
           <Text c="text-secondary">
-            {t`为外部 Agent 配置同义词、业务口径与逻辑关联。元数据直接使用 Metabase 已同步的数据库表字段；召回通过 Metabase MCP 的 retrieve_query_evidence 提供，不在此生成 SQL。右上角 Agent 侧栏使用与营销云相同的 chatbox + 短票嵌入，无需在 iframe 内飞书登录。`}
+            {t`为外部 Agent 配置同义词、业务口径与逻辑关联。元数据直接使用 Metabase 已同步的数据库表字段；召回通过 Metabase MCP 的 retrieve_query_evidence 提供，不在此生成 SQL。`}
           </Text>
-
-          <Stack
-            gap="sm"
-            p="md"
-            style={{
-              border: "1px solid var(--mb-color-border)",
-              borderRadius: 8,
-            }}
-          >
-            <Text fw="bold">{t`Agent iframe SSO`}</Text>
-            <Text c="text-secondary" size="sm">
-              {t`与营销云一致：服务端用 X-API-Key 签发短票，侧栏打开 /chatbox#token=…。API Base 形如 https://agent.whaee.com/api/v1`}
-            </Text>
-            <Group grow align="flex-start">
-              <TextInput
-                label={t`API Base`}
-                placeholder="https://agent.whaee.com/api/v1"
-                value={agentDraft.api_base}
-                disabled={busy !== null}
-                onChange={(event) => {
-                  setAgentDraft((prev) => ({
-                    ...prev,
-                    api_base: event.currentTarget.value,
-                  }));
-                  setAgentDirty(true);
-                }}
-              />
-              <TextInput
-                label={t`UI Origin`}
-                placeholder="https://agent.whaee.com"
-                value={agentDraft.ui_origin}
-                disabled={busy !== null}
-                onChange={(event) => {
-                  setAgentDraft((prev) => ({
-                    ...prev,
-                    ui_origin: event.currentTarget.value,
-                  }));
-                  setAgentDirty(true);
-                }}
-              />
-            </Group>
-            <Group grow align="flex-start">
-              <TextInput
-                label={t`UI Base（可选）`}
-                placeholder="/"
-                value={agentDraft.ui_base}
-                disabled={busy !== null}
-                onChange={(event) => {
-                  setAgentDraft((prev) => ({
-                    ...prev,
-                    ui_base: event.currentTarget.value,
-                  }));
-                  setAgentDirty(true);
-                }}
-              />
-              <TextInput
-                label={t`Agent ID`}
-                value={agentDraft.agent_id}
-                disabled={busy !== null}
-                onChange={(event) => {
-                  setAgentDraft((prev) => ({
-                    ...prev,
-                    agent_id: event.currentTarget.value,
-                  }));
-                  setAgentDirty(true);
-                }}
-              />
-            </Group>
-            <PasswordInput
-              label={t`平台 API Key`}
-              placeholder={
-                agentDraft.api_key_configured
-                  ? t`已配置（留空则不修改）`
-                  : t`共享账号 X-API-Key`
-              }
-              value={agentApiKeyDraft}
-              disabled={busy !== null}
-              onChange={(event) => {
-                setAgentApiKeyDraft(event.currentTarget.value);
-                setAgentDirty(true);
-              }}
-            />
-            <Group>
-              <Button
-                variant="filled"
-                disabled={!agentDirty || busy !== null}
-                loading={busy === "agent"}
-                onClick={() => void saveAgent()}
-              >
-                {t`保存 Agent SSO`}
-              </Button>
-              {agentDraft.enabled ? (
-                <Badge color="positive">{t`侧栏可用`}</Badge>
-              ) : (
-                <Badge color="warning">{t`未配齐`}</Badge>
-              )}
-            </Group>
-          </Stack>
 
           <Stack
             gap="sm"
@@ -416,14 +286,40 @@ export function KnowledgeConfigPage() {
               searchable
               onChange={(value) => selectDatabase(value)}
             />
-            <Group gap="sm">
-              {state && (
-                <Badge color={state.index.ready ? "positive" : "warning"}>
-                  {state.index.ready
-                    ? `${t`索引就绪`} (${state.index.document_count})`
-                    : t`索引未就绪`}
-                </Badge>
-              )}
+            <Group gap="sm" align="center">
+              {state &&
+                (state.index.ready ? (
+                  <Badge color="positive">
+                    {`${t`索引就绪`} (${state.index.document_count})`}
+                  </Badge>
+                ) : (
+                  <Group gap={6} align="center">
+                    <Badge color="warning">
+                      {`${t`索引未就绪`} (${state.index.document_count})`}
+                    </Badge>
+                    <Tooltip
+                      label={
+                        <Text c="inherit" maw="22rem">
+                          {indexNotReadyMessage(
+                            state.index.not_ready_reason,
+                            state.index.document_count,
+                            state.index.table_count ?? 0,
+                          )}
+                        </Text>
+                      }
+                      multiline
+                      maw={360}
+                    >
+                      <Icon
+                        name="info"
+                        size={16}
+                        c="text-secondary"
+                        style={{ cursor: "help" }}
+                        aria-label={t`索引未就绪原因`}
+                      />
+                    </Tooltip>
+                  </Group>
+                ))}
               <Button
                 disabled={locked || databaseId == null}
                 loading={busy === "reindex"}
@@ -434,7 +330,9 @@ export function KnowledgeConfigPage() {
               <Button
                 variant="default"
                 disabled={busy !== null || databaseId == null}
-                onClick={() => databaseId != null && void loadKnowledge(databaseId)}
+                onClick={() =>
+                  databaseId != null && void loadKnowledge(databaseId)
+                }
               >
                 {t`刷新`}
               </Button>

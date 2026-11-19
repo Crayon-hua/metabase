@@ -42,6 +42,11 @@ export function MetabotNavPane() {
           label={t`知识配置`}
           path="/admin/metabot/knowledge"
         />
+        <AdminNavItem
+          icon="lock"
+          label={t`Agent iframe SSO`}
+          path="/admin/metabot/agent-sso"
+        />
         {AiControlsNavItems}
       </AdminNavWrapper>
     </Flex>

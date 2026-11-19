@@ -6,10 +6,10 @@ import {
   Box,
   Button,
   Group,
+  MultiAutocomplete,
   Select,
   Stack,
   Tabs,
-  TagsInput,
   Text,
   TextInput,
   Textarea,
@@ -39,16 +39,25 @@ type KnowledgeEditorProps = {
 
 function cloneKnowledge(knowledge: QueryKnowledgeBody): QueryKnowledgeBody {
   return {
-    aliases: knowledge.aliases.map((item) => ({
-      ...item,
+    aliases: (knowledge.aliases ?? []).map((item) => ({
+      table: item.table ?? "",
       column: item.column ?? "",
+      name: item.name ?? "",
       synonyms: [...(item.synonyms ?? [])],
+      description: item.description ?? "",
     })),
-    terms: knowledge.terms.map((item) => ({
-      ...item,
+    terms: (knowledge.terms ?? []).map((item) => ({
+      name: item.name ?? "",
       synonyms: [...(item.synonyms ?? [])],
+      description: item.description ?? "",
     })),
-    relations: knowledge.relations.map((item) => ({ ...item })),
+    relations: (knowledge.relations ?? []).map((item) => ({
+      table: item.table ?? "",
+      column: item.column ?? "",
+      targetTable: item.targetTable ?? "",
+      targetColumn: item.targetColumn ?? "",
+      ...(item.constraint ? { constraint: item.constraint } : {}),
+    })),
   };
 }
 
@@ -251,16 +260,20 @@ export function KnowledgeEditor({
                       markDirty(next);
                     }}
                   />
-                  <TagsInput
+                  <MultiAutocomplete
                     label={t`同义词`}
-                    value={item.synonyms}
+                    value={item.synonyms ?? []}
+                    data={item.synonyms ?? []}
                     disabled={locked}
-                    placeholder={t`回车添加`}
+                    placeholder={t`回车或逗号添加，支持粘贴`}
                     onChange={(value) => {
+                      const synonyms = (value ?? [])
+                        .map((entry) => String(entry ?? "").trim())
+                        .filter(Boolean);
                       const next = cloneKnowledge(draft);
                       next.aliases[index] = {
                         ...next.aliases[index],
-                        synonyms: value,
+                        synonyms,
                       };
                       markDirty(next);
                     }}
@@ -338,16 +351,20 @@ export function KnowledgeEditor({
                       markDirty(next);
                     }}
                   />
-                  <TagsInput
+                  <MultiAutocomplete
                     label={t`同义词`}
-                    value={item.synonyms}
+                    value={item.synonyms ?? []}
+                    data={item.synonyms ?? []}
                     disabled={locked}
-                    placeholder={t`回车添加`}
+                    placeholder={t`回车或逗号添加，支持粘贴`}
                     onChange={(value) => {
+                      const synonyms = (value ?? [])
+                        .map((entry) => String(entry ?? "").trim())
+                        .filter(Boolean);
                       const next = cloneKnowledge(draft);
                       next.terms[index] = {
                         ...next.terms[index],
-                        synonyms: value,
+                        synonyms,
                       };
                       markDirty(next);
                     }}

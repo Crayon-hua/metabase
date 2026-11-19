@@ -6,11 +6,13 @@ import {
   isValidElement,
   memo,
   useMemo,
+  useState,
 } from "react";
 import { t } from "ttag";
 
+import { copyTextToClipboard } from "metabase/common/utils/clipboard";
 import { mbProtocolModelToSuggestionModel } from "metabase/rich_text_editing/tiptap/extensions/shared/suggestionUtils";
-import { ActionIcon, CopyButton, Icon, Tooltip } from "metabase/ui";
+import { ActionIcon, Icon, Tooltip } from "metabase/ui";
 import { parseMetabaseProtocolLink } from "metabase/urls";
 
 import S from "./AIMarkdown.module.css";
@@ -54,28 +56,34 @@ const MarkdownCodeBlock = ({
   ...props
 }: ComponentPropsWithoutRef<"pre">) => {
   const code = getNodeText(children);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    const ok = await copyTextToClipboard(code);
+    if (!ok) {
+      return;
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className={S.codeBlock}>
       <pre {...props}>{children}</pre>
-      <CopyButton value={code}>
-        {({ copied, copy }: { copied: boolean; copy: () => void }) => (
-          <Tooltip
-            label={copied ? t`Copied!` : t`Copy code`}
-            opened={copied || undefined}
-          >
-            <ActionIcon
-              aria-label={t`Copy code`}
-              className={S.copyCodeButton}
-              data-testid="metabot-code-block-copy"
-              size="sm"
-              onClick={copy}
-            >
-              <Icon name="copy" size="1rem" />
-            </ActionIcon>
-          </Tooltip>
-        )}
-      </CopyButton>
+      <Tooltip
+        label={copied ? t`Copied!` : t`Copy code`}
+        opened={copied || undefined}
+      >
+        <ActionIcon
+          aria-label={t`Copy code`}
+          className={S.copyCodeButton}
+          data-testid="metabot-code-block-copy"
+          size="sm"
+          onClick={() => void handleCopy()}
+        >
+          <Icon name="copy" size="1rem" />
+        </ActionIcon>
+      </Tooltip>
     </div>
   );
 };

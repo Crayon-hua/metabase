@@ -165,6 +165,13 @@ const knowledgeConfig = () =>
     Component: KnowledgeConfigPage,
   }));
 
+const agentSsoConfig = () =>
+  import(/* webpackChunkName: "admin" */ "./ai/AgentSsoConfigPage").then(
+    ({ AgentSsoConfigPage }) => ({
+      Component: AgentSsoConfigPage,
+    }),
+  );
+
 const help = () =>
   import(/* webpackChunkName: "admin" */ "metabase/admin/help").then(
     ({ Help }) => ({ Component: Help }),
@@ -388,6 +395,11 @@ export const getRoutes = (
               key="knowledge"
               path="knowledge"
               lazy={knowledgeConfig}
+            />
+            <Route
+              key="agent-sso"
+              path="agent-sso"
+              lazy={agentSsoConfig}
             />
           </Route>
           <Route

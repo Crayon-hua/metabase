@@ -1,8 +1,8 @@
-import { useClipboard } from "@mantine/hooks";
 import cx from "classnames";
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { t } from "ttag";
 
+import { copyTextToClipboard } from "metabase/common/utils/clipboard";
 import Styles from "metabase/css/core/index.css";
 import visuallyHidden from "metabase/css/core/visually-hidden.module.css";
 import { Icon, Text, Tooltip, UnstyledButton } from "metabase/ui";
@@ -28,11 +28,16 @@ export const CopyButton = ({
   "aria-label": ariaLabel,
   target,
 }: CopyButtonProps) => {
-  const clipboard = useClipboard({ timeout: 2000 });
+  const [copied, setCopied] = useState(false);
   const accessibleName = ariaLabel ?? (target ? undefined : t`Copy`);
 
-  const handleClick = () => {
-    clipboard.copy(value);
+  const handleClick = async () => {
+    const ok = await copyTextToClipboard(value);
+    if (!ok) {
+      return;
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
     onCopy?.();
   };
 
@@ -40,20 +45,20 @@ export const CopyButton = ({
     <>
       <Tooltip
         label={<Text fw={700} c="inherit">{t`Copied!`}</Text>}
-        opened={clipboard.copied}
+        opened={copied}
       >
         <UnstyledButton
           className={cx(S.CopyButton, className)}
           data-testid="copy-button"
           aria-label={accessibleName}
-          onClick={handleClick}
+          onClick={() => void handleClick()}
           style={style}
         >
           {target ?? COPY_BUTTON_ICON}
         </UnstyledButton>
       </Tooltip>
       <span role="status" className={visuallyHidden.visuallyHidden}>
-        {clipboard.copied ? t`Copied!` : ""}
+        {copied ? t`Copied!` : ""}
       </span>
     </>
   );

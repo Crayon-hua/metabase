@@ -1,6 +1,7 @@
 (ns metabase.query-knowledge.core
   "Public API for query knowledge: get/save/reindex/retrieve."
   (:require
+   [clojure.string :as str]
    [metabase.query-knowledge.db :as qk.db]
    [metabase.query-knowledge.embed :as qk.embed]
    [metabase.query-knowledge.index :as qk.index]
@@ -40,27 +41,43 @@
    :api_key_configured (boolean (not-empty (qk.settings/query-knowledge-embedding-api-key)))
    :configured        (qk.embed/embedding-configured?)})
 
+(defn- index-not-ready-reason
+  "Machine-readable reason when the vector index is not ready."
+  [docs ident embedding-model table-count]
+  (cond
+    (str/blank? ident)                          "embedding-not-configured"
+    (zero? table-count)                         "no-synced-tables"
+    (not (pos? docs))                           "no-documents"
+    (not= ident (or embedding-model ""))        "embedding-model-mismatch"
+    :else                                       nil))
+
 (mu/defn get-knowledge
   "Knowledge + tables + index status for Admin UI / MCP."
   [database-id :- ms/PositiveInt]
   (when-not (qk.metadata/database-exists? database-id)
     (throw (ex-info "Database not found" {:status-code 404 :database-id database-id})))
-  (let [row    (qk.db/by-database-id database-id)
-        body   (normalize-body (or (:body row) qk.db/empty-body))
-        tables (qk.metadata/catalog-tables database-id)
-        rev    (or (:revision row) 0)
-        docs   (qk.db/document-count database-id)
-        ident  (qk.embed/embedding-identity)]
+  (let [row         (qk.db/by-database-id database-id)
+        body        (normalize-body (or (:body row) qk.db/empty-body))
+        tables      (qk.metadata/catalog-tables database-id)
+        rev         (or (:revision row) 0)
+        docs        (qk.db/document-count database-id)
+        ident       (qk.embed/embedding-identity)
+        emb-model   (or (:embedding_model row) "")
+        table-count (count tables)
+        ready?      (and (pos? docs)
+                         (not-empty ident)
+                         (= ident emb-model))]
     {:database_id     database-id
      :revision        rev
      :knowledge       body
      :tables          tables
-     :embedding_model (or (:embedding_model row) "")
-     :index           {:document_count docs
-                       :ready          (and (pos? docs)
-                                            (not-empty ident)
-                                            (= ident (or (:embedding_model row) "")))
-                       :configured     (qk.embed/embedding-configured?)}
+     :embedding_model emb-model
+     :index           {:document_count    docs
+                       :table_count       table-count
+                       :ready             ready?
+                       :configured        (qk.embed/embedding-configured?)
+                       :not_ready_reason  (when-not ready?
+                                            (index-not-ready-reason docs ident emb-model table-count))}
      :embedding       (embedding-settings)}))
 
 (mu/defn save-knowledge!
